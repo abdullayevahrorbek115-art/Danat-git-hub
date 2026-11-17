@@ -2,7 +2,7 @@ const { InlineKeyboard } = require("grammy");
 const { data, save } = require("./db");
 const { allAdmins } = require("./config");
 const provider = require("./provider");
-const { esc, fmt, isTg } = require("./util");
+const { esc, fmt } = require("./util");
 
 const STATUS = {
   processing: "⏳ Jarayonda",
@@ -40,7 +40,7 @@ function adminOrderText(o) {
     `👤 ${esc(u.name || "")} ${u.username ? "@" + esc(u.username) : ""} (<code>${o.userId}</code>)`,
     `🎮 ${esc(o.gameName)} — ${esc(o.pkgName)}`,
     `💵 ${fmt(o.price)}`,
-    isTg(o) ? `👤 Qabul qiluvchi: @${esc(o.playerId)}` : `🆔 ID: <code>${esc(o.playerId)}</code>`,
+    o.kind === "tg" ? `👤 Username: <code>${esc(o.playerId)}</code>` : `🆔 ID: <code>${esc(o.playerId)}</code>`,
   ];
   if (o.serverId) lines.push(`🌐 Server: <code>${esc(o.serverId)}</code>`);
   if (o.nickname) lines.push(`👤 Nik: ${esc(o.nickname)}`);
@@ -99,7 +99,7 @@ async function completeOrder(api, order, ref) {
   await safeSend(
     api,
     order.userId,
-    `✅ Buyurtma #${order.id} yetkazildi!\n🎮 ${esc(order.gameName)} — ${esc(order.pkgName)}\n${isTg(order) ? "👤 @" + esc(order.playerId) : "🆔 <code>" + esc(order.playerId) + "</code>"}\n\nRahmat! 🙌`
+    `✅ Buyurtma #${order.id} yetkazildi!\n🎮 ${esc(order.gameName)} — ${esc(order.pkgName)}\n🆔 <code>${esc(order.playerId)}</code>\n\nRahmat! 🙌`
   );
   await notifyChat(api, `✅ Buyurtma #${order.id} bajarildi: ${esc(order.gameName)} — ${esc(order.pkgName)}`);
   return true;

@@ -1,6 +1,6 @@
 # Donat bot (Telegram, Node.js + grammY)
 
-PUBG Mobile, Free Fire, Mobile Legends, Standoff 2, **Telegram Premium va Telegram Stars** uchun donat boti. Admin paneldan o'yin va paketlarni o'zingiz qo'shasiz, o'zgartirasiz, o'chirasiz.
+PUBG Mobile, Free Fire, Mobile Legends va Standoff 2 uchun donat boti. Admin paneldan o'yin va paketlarni o'zingiz qo'shasiz, o'zgartirasiz, o'chirasiz.
 
 ## Ishga tushirish
 1. **Token**: @BotFather → `/newbot`. Tokenni hech kimga ko'rsatmang.
@@ -64,16 +64,14 @@ Panel → 🔘 Tugmalar. Foydalanuvchi menyusiga o'zingizning tugmalaringizni qo
 - 🔗 **Havolali**: bosilganda havola tugmasi chiqadi (kanal, sayt...).
 Yangi tugma foydalanuvchida /start bosganda yoki «📢 Xabar yuborish» dan keyin paydo bo'ladi (xabar yuborganda menyu ham yangilanadi).
 
-## ⭐️ Telegram Premium va 🌟 Stars
-Premium va Stars alohida "o'yin" ko'rinishida (turi: Premium / Stars) avtomatik qo'shilgan, namunaviy paketlar bilan (Premium: 3/6/12 oy, Stars: 50–1000). **Narxlar namuna** — panel → 🎮 O'yinlar → Telegram Premium/Stars → Paketlar orqali o'zingizning narxingizga o'zgartiring.
-- Mijozdan Player ID o'rniga **Telegram @username** so'raladi (yoki «🙋 O'zimga» tugmasi).
-- Har qanday o'yinning turini panelda o'zgartirish mumkin: 🔀 Turi (O'yin → Premium → Stars).
-- Standart rejim `manual`: buyurtma adminga keladi, admin Premium/Stars ni yuborib «Bajarildi» bosadi.
-- `api` rejimida provayderga `{username}`, `{kind}` (`premium`/`stars`) va `{sku}` (masalan `premium_3`, `stars_100`) yuboriladi; provayder kodi va SKU lar oldindan yozilgan, ularni provayderingiz kodlariga moslang.
-- Mavjud `data/db.json` bor bo'lsa ham, yangilanganda Premium/Stars bir marta o'zi qo'shiladi (o'chirib tashlasangiz qayta paydo bo'lmaydi).
+## ⭐ Telegram Premium / Stars
+Panel → 🎮 O'yinlar → «⭐ Telegram Premium/Stars qo'shish». Ikkita bo'lim yaratiladi (turi: Telegram). Keyin har biriga **📦 Paketlar** orqali paket va narx kiriting (masalan: Premium 3 oy, Stars 100 ta).
+- Bunday bo'limda mijozdan Player ID o'rniga **Telegram username** (@username) so'raladi.
+- Istalgan o'yinni ham ⭐ turiga o'tkazish mumkin (o'yin menyusida «Turi» tugmasi).
+- Username Telegram orqali tekshirib bo'lmaydi, shuning uchun u qo'lda yetkaziladi (admin «Bajarildi» bosadi) yoki provayder API si orqali.
 
-## 🛒 Donat tugmasi (menyuga o'z tugmangiz)
-Panel → 🔘 Tugmalar → **🛒 Donat tugmasi**: nomini yozasiz, so'ng nima ochilishini tanlaysiz — «Hamma o'yinlar ro'yxati» (🎮 Donat olish kabi) yoki bitta o'yin/xizmat (masalan Telegram Premium — tugma bosilganda to'g'ridan-to'g'ri Premium paketlari chiqadi).
+## ⚙️ Funksiyali tugmalar
+Panel → 🔘 Tugmalar → «➕ Funksiyali tugma». Nomini yozing, so'ng funksiyani tanlang: o'yinlar ro'yxati, hisob, buyurtmalar, hisobni to'ldirish, promo kod, do'st taklif qilish, aloqa yoki **aniq bir bo'lim** (masalan «⭐ Stars» → Stars paketlari).
 
-## Provayderni ulash
-Batafsil qo'llanma: **PROVAYDER.md**
+## 👤 ID tekshirishda nik
+Nik faqat provayder API si orqali olinadi (rejim `api`, o'yinda provayder kodi bor). Nik chiqmasa: 🔌 Provayder → 🧪 Sinash bilan xom javobni ko'ring va «Javobdagi nik yo'li» ni shunga moslang. Bot endi yo'l noto'g'ri bo'lsa ham `nickname`, `name`, `username` kabi keng tarqalgan nomlarni o'zi qidiradi.

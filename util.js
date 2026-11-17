@@ -31,11 +31,6 @@ async function show(ctx, text, kb) {
   await ctx.reply(text, extra);
 }
 
-// Telegram xizmatlari (Premium/Stars) uchun: ID emas, @username kerak
-const isTg = (g) => !!g && (g.kind === "premium" || g.kind === "stars");
-const normUser = (t) => String(t).trim().replace(/^@/, "").replace(/^https?:\/\/t\.me\//i, "");
-const validUser = (t) => /^[A-Za-z][A-Za-z0-9_]{4,31}$/.test(normUser(t));
-
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-module.exports = { MENU, esc, fmt, show, sleep, isTg, normUser, validUser };
+module.exports = { MENU, esc, fmt, show, sleep };

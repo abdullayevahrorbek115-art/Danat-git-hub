@@ -2,7 +2,7 @@
 const { Composer, InlineKeyboard } = require("grammy");
 const { data, save, nextId } = require("./db");
 const { isAdmin, isMainAdmin, adminIds, allAdmins } = require("./config");
-const { esc, fmt, show, sleep, MENU, isTg } = require("./util");
+const { esc, fmt, show, sleep, MENU } = require("./util");
 const provider = require("./provider");
 const { mainKb } = require("./user");
 const {
@@ -63,7 +63,7 @@ async function panel(ctx) {
 // "a:" bilan boshlanadigan har bir tugma bosilganda kutilayotgan kiritish bekor bo'ladi
 adm.on("callback_query:data", async (ctx, next) => {
   const d = ctx.callbackQuery.data;
-  if (d.startsWith("a:") && d !== "a:bcy") reset(ctx);
+  if (d.startsWith("a:") && d !== "a:bcy" && !d.startsWith("a:bf")) reset(ctx);
   await next();
 });
 
@@ -88,23 +88,10 @@ async function gamesList(ctx) {
   data().games.forEach((g) =>
     kb.text(`${g.active ? "✅" : "🚫"} ${g.emoji} ${g.name}`, `a:g:${g.id}`).row()
   );
-  kb.text("➕ O'yin qo'shish", "a:gn").row().text("⬅️ Orqaga", "a:home");
+  kb.text("➕ O'yin qo'shish", "a:gn").row();
+  kb.text("⭐ Telegram Premium/Stars qo'shish", "a:gtg").row().text("⬅️ Orqaga", "a:home");
   await show(ctx, "🎮 <b>O'yinlar</b>\nTahrirlash uchun o'yinni tanlang:", kb);
 }
-
-const KIND = { game: "🎮 O'yin", premium: "⭐️ Telegram Premium", stars: "🌟 Telegram Stars" };
-const KIND_ORDER = ["game", "premium", "stars"];
-
-adm.callbackQuery(/^a:gk:(\d+)$/, async (ctx) => {
-  await ctx.answerCallbackQuery();
-  const g = findGame(ctx.match[1]);
-  if (g) {
-    g.kind = KIND_ORDER[(KIND_ORDER.indexOf(g.kind || "game") + 1) % KIND_ORDER.length];
-    if (g.kind !== "game") g.needsServer = false;
-    save();
-  }
-  await gameMenu(ctx, ctx.match[1]);
-});
 
 async function gameMenu(ctx, id) {
   const g = findGame(id);
@@ -113,8 +100,8 @@ async function gameMenu(ctx, id) {
   const text =
     `${g.emoji} <b>${esc(g.name)}</b>\n` +
     `Holat: ${g.active ? "✅ yoqilgan" : "🚫 o'chirilgan"}\n` +
-    `Turi: ${KIND[g.kind || "game"]}\n` +
-    (isTg(g) ? "" : `Server ID so'rash: ${g.needsServer ? "ha" : "yo'q"}\n`) +
+    `Turi: ${g.kind === "tg" ? "⭐ Telegram (username so'raladi)" : "🎮 O'yin (Player ID so'raladi)"}\n` +
+    `Server ID so'rash: ${g.needsServer ? "ha" : "yo'q"}\n` +
     `Provayder kodi: ${g.providerCode ? "<code>" + esc(g.providerCode) + "</code>" : "—"}\n` +
     `Paketlar: ${n} ta`;
   const kb = new InlineKeyboard()
@@ -125,9 +112,9 @@ async function gameMenu(ctx, id) {
     .text("✏️ Nomi", `a:ge:${g.id}`)
     .text("🔑 Provayder kodi", `a:gc:${g.id}`)
     .row()
-    .text(`🔀 Turi: ${KIND[g.kind || "game"]}`, `a:gk:${g.id}`)
-    .row()
     .text(g.needsServer ? "🌐 Server ID: yoqilgan" : "🌐 Server ID: o'chiq", `a:gs:${g.id}`)
+    .row()
+    .text(g.kind === "tg" ? "⭐ Turi: Telegram (username)" : "🎮 Turi: O'yin (ID)", `a:gk:${g.id}`)
     .row()
     .text(g.active ? "🚫 Vaqtincha o'chirish" : "✅ Yoqish", `a:gt:${g.id}`)
     .row()
@@ -149,6 +136,27 @@ adm.callbackQuery(/^a:gs:(\d+)$/, async (ctx) => {
   if (g) { g.needsServer = !g.needsServer; save(); }
   await ctx.answerCallbackQuery();
   await gameMenu(ctx, ctx.match[1]);
+});
+adm.callbackQuery(/^a:gk:(\d+)$/, async (ctx) => {
+  const g = findGame(ctx.match[1]);
+  if (g) {
+    g.kind = g.kind === "tg" ? "game" : "tg";
+    if (g.kind === "tg") g.needsServer = false;
+    save();
+  }
+  await ctx.answerCallbackQuery();
+  await gameMenu(ctx, ctx.match[1]);
+});
+adm.callbackQuery("a:gtg", async (ctx) => {
+  let added = 0;
+  for (const [name, emoji] of [["Telegram Premium", "💎"], ["Telegram Stars", "⭐"]]) {
+    if (data().games.some((g) => g.name === name)) continue;
+    data().games.push({ id: nextId("game"), name, emoji, needsServer: false, active: true, providerCode: "", kind: "tg" });
+    added++;
+  }
+  save();
+  await ctx.answerCallbackQuery({ text: added ? "✅ Qo'shildi. Endi paketlarni kiriting." : "Ular allaqachon bor", show_alert: !!added });
+  await gamesList(ctx);
 });
 adm.callbackQuery(/^a:gt:(\d+)$/, async (ctx) => {
   const g = findGame(ctx.match[1]);
@@ -595,11 +603,11 @@ const PHELP = {
   authHeader: "Kalit yuboriladigan sarlavha nomi, masalan <code>Authorization</code> yoki <code>X-API-Key</code>. Sarlavha kerak bo'lmasa <code>-</code> yuboring",
   authValue: "Sarlavha qiymati. Kalit o'rniga <code>{key}</code> yozing, masalan <code>Bearer {key}</code>. Kerak bo'lmasa <code>-</code>",
   checkPath: "ID tekshirish manzilining oxiri, masalan <code>/check-id</code>",
-  checkBody: "JSON shablon. O'rinbosarlar: {game} {player_id} {username} {kind} {server_id} {key}",
+  checkBody: "JSON shablon. O'rinbosarlar: {game} {player_id} {server_id} {key}",
   checkOk: "Javobda muvaffaqiyatni bildiruvchi maydon yo'li, masalan <code>success</code> yoki <code>status==ok</code> (nuqta bilan: <code>data.found</code>)",
   checkNick: "Javobda nik joylashgan yo'l, masalan <code>nickname</code> yoki <code>data.name</code>",
   orderPath: "Buyurtma yuborish manzilining oxiri, masalan <code>/order</code>",
-  orderBody: "JSON shablon. O'rinbosarlar: {game} {sku} {player_id} {username} {kind} {server_id} {order_id} {key}",
+  orderBody: "JSON shablon. O'rinbosarlar: {game} {sku} {player_id} {server_id} {order_id} {key}",
   orderOk: "Buyurtma qabul qilinganini bildiruvchi maydon yo'li, masalan <code>success</code> yoki <code>status==success</code>",
   orderRef: "Javobda provayder buyurtma raqami yo'li, masalan <code>order_id</code>",
   orderErr: "Xato bo'lsa sabab yozilgan maydon yo'li, masalan <code>message</code>",
@@ -685,53 +693,41 @@ adm.callbackQuery("a:pt", async (ctx) => {
 
 // ---------- Maxsus menyu tugmalari ----------
 const MAX_BUTTONS = 12;
+const BTN_ICON = { text: "📝", link: "🔗", func: "⚙️" };
+const FUNCS = {
+  shop: "🎮 Donat olish (o'yinlar ro'yxati)",
+  bal: "💰 Hisobim",
+  orders: "📦 Buyurtmalarim",
+  topup: "💳 Hisobni to'ldirish",
+  promo: "🎁 Promo kod",
+  ref: "👥 Do'st taklif qilish",
+  help: "☎️ Aloqa",
+};
+const funcName = (fn) => {
+  if (FUNCS[fn]) return FUNCS[fn];
+  const m = /^game:(\d+)$/.exec(fn || "");
+  const g = m && findGame(m[1]);
+  return g ? `${g.emoji} ${g.name} bo'limi` : "?";
+};
 
 function normContent(type, t) {
   const x = String(t).trim();
-  if (type === "shop") return /^\d+$/.test(x) ? x : null;
   if (type === "text") return x.length >= 1 && x.length <= 3000 ? x : null;
   if (/^@[A-Za-z0-9_]{5,}$/.test(x)) return "https://t.me/" + x.slice(1);
   return /^https?:\/\/\S+$/i.test(x) ? x : null;
 }
-const BT_ICON = { text: "📝", link: "🔗", shop: "🛒" };
-const BT_NAME = { text: "📝 matnli", link: "🔗 havolali", shop: "🛒 donat" };
-const shopTarget = (c) => (c === "0" ? "Hamma o'yinlar ro'yxati" : (findGame(c) ? findGame(c).name : "⚠️ o'chirilgan o'yin"));
-
-// Donat tugmasi qaysi o'yinni ochishini tanlash (yangi tugma yoki mavjudini o'zgartirish)
-async function shopPicker(ctx, mode) {
-  const kb = new InlineKeyboard().text("🎮 Hamma o'yinlar ro'yxati", `a:bts:${mode}:0`).row();
-  data().games.forEach((g) => kb.text(`${g.emoji} ${g.name}`, `a:bts:${mode}:${g.id}`).row());
-  await show(ctx, "🛒 Tugma bosilganda nima ochilsin?\n\n• «Hamma o'yinlar ro'yxati» — «🎮 Donat olish» kabi.\n• Bitta o'yin/xizmat — to'g'ridan-to'g'ri shu paketlar (masalan, Premium yoki Stars).", kb);
-}
-adm.callbackQuery(/^a:bts:(new|\d+):(\d+)$/, async (ctx) => {
-  await ctx.answerCallbackQuery();
-  const [, mode, target] = ctx.match;
-  const tmp = ctx.session.tmp;
-  if (mode === "new") {
-    if (ctx.session.step !== "adm:btshop" || !tmp.label) return btnScreen(ctx);
-    const id = nextId("btn");
-    data().settings.buttons.push({ id, label: tmp.label, type: "shop", content: target });
-    save();
-    reset(ctx);
-    await ctx.reply("✅ Tugma qo'shildi. Foydalanuvchilarda /start bosganda yoki «Xabar yuborish» dan keyin ko'rinadi.");
-    return btnMenu(ctx, id);
-  }
-  const b = findBtn(mode);
-  if (b) { b.content = target; save(); }
-  await btnMenu(ctx, mode);
-});
 const findBtn = (id) => (data().settings.buttons || []).find((b) => b.id === Number(id));
 
 async function btnScreen(ctx) {
   const list = data().settings.buttons || [];
   const kb = new InlineKeyboard();
-  list.forEach((b) => kb.text(`${BT_ICON[b.type] || "📝"} ${b.label}`, `a:btd:${b.id}`).row());
+  list.forEach((b) => kb.text(`${BTN_ICON[b.type] || "📝"} ${b.label}`, `a:btd:${b.id}`).row());
   kb.text("➕ Matnli tugma", "a:btnew:text").text("➕ Havolali tugma", "a:btnew:link").row();
-  kb.text("🛒 Donat tugmasi (o'yin/xizmat)", "a:btnew:shop").row();
+  kb.text("➕ Funksiyali tugma", "a:btnew:func").row();
   kb.text("⬅️ Orqaga", "a:home");
   await show(
     ctx,
-    "🔘 <b>Menyu tugmalari</b>\n📝 Matnli — bosilganda botdan xabar chiqadi (qoidalar, narxlar, aloqa...).\n🔗 Havolali — bosilganda havola tugmasi chiqadi (kanal, sayt...).\n\nTugmalar foydalanuvchi menyusiga qo'shiladi. Foydalanuvchilarda yangi tugmalar /start bosganda yoki «Xabar yuborish» dan keyin paydo bo'ladi.",
+    "🔘 <b>Menyu tugmalari</b>\n📝 Matnli — bosilganda botdan xabar chiqadi (qoidalar, narxlar, aloqa...).\n🔗 Havolali — bosilganda havola tugmasi chiqadi (kanal, sayt...).\n⚙️ Funksiyali — bosilganda bot funksiyasi ishlaydi (masalan «⭐ Stars» → Stars paketlari ro'yxati).\n\nTugmalar foydalanuvchi menyusiga qo'shiladi. Foydalanuvchilarda yangi tugmalar /start bosganda yoki «Xabar yuborish» dan keyin paydo bo'ladi.",
     kb
   );
 }
@@ -739,23 +735,22 @@ async function btnScreen(ctx) {
 async function btnMenu(ctx, id) {
   const b = findBtn(id);
   if (!b) return btnScreen(ctx);
-  const kb = new InlineKeyboard()
-    .text("✏️ Nomi", `a:btl:${b.id}`)
-    .text(b.type === "link" ? "✏️ Havola" : b.type === "shop" ? "✏️ Nima ochiladi" : "✏️ Matn", `a:btc:${b.id}`)
-    .row()
+  const kb = new InlineKeyboard().text("✏️ Nomi", `a:btl:${b.id}`);
+  if (b.type !== "func") kb.text(b.type === "link" ? "✏️ Havola" : "✏️ Matn", `a:btc:${b.id}`);
+  kb.row()
     .text("🗑 O'chirish", `a:btx:${b.id}`)
     .row()
     .text("⬅️ Orqaga", "a:btns");
   const content = b.content.length > 300 ? b.content.slice(0, 300) + "…" : b.content;
   await show(
     ctx,
-    `🔘 <b>${esc(b.label)}</b>\nTuri: ${BT_NAME[b.type] || b.type}\n\n${b.type === "shop" ? "Ochiladi: " + esc(shopTarget(b.content)) : esc(content)}`,
+    `🔘 <b>${esc(b.label)}</b>\nTuri: ${b.type === "link" ? "🔗 havolali" : b.type === "func" ? "⚙️ funksiyali" : "📝 matnli"}\n\n${b.type === "func" ? esc(funcName(b.content)) : esc(content)}`,
     kb
   );
 }
 
 adm.callbackQuery("a:btns", async (ctx) => { await ctx.answerCallbackQuery(); await btnScreen(ctx); });
-adm.callbackQuery(/^a:btnew:(text|link|shop)$/, async (ctx) => {
+adm.callbackQuery(/^a:btnew:(text|link|func)$/, async (ctx) => {
   if ((data().settings.buttons || []).length >= MAX_BUTTONS) {
     return ctx.answerCallbackQuery({ text: `Eng ko'pi bilan ${MAX_BUTTONS} ta tugma qo'shish mumkin`, show_alert: true });
   }
@@ -766,12 +761,32 @@ adm.callbackQuery(/^a:btnew:(text|link|shop)$/, async (ctx) => {
     "🔘 Tugma nomini yuboring (30 belgigacha, emoji bilan chiroyli ko'rinadi), masalan: <code>📜 Qoidalar</code>"
   );
 });
+// Funksiya tanlash (tugma nomi session.tmp da turibdi)
+adm.callbackQuery(/^a:bf:(\w+)$/, async (ctx) => {
+  const s = ctx.session;
+  const fn = ctx.match[1];
+  if (s.step !== "adm:btfunc" || !s.tmp.label || !FUNCS[fn]) return ctx.answerCallbackQuery({ text: "Sessiya eskirdi", show_alert: true });
+  await finishFuncBtn(ctx, fn);
+});
+adm.callbackQuery(/^a:bfg:(\d+)$/, async (ctx) => {
+  const s = ctx.session;
+  if (s.step !== "adm:btfunc" || !s.tmp.label || !findGame(ctx.match[1])) return ctx.answerCallbackQuery({ text: "Sessiya eskirdi", show_alert: true });
+  await finishFuncBtn(ctx, "game:" + ctx.match[1]);
+});
+async function finishFuncBtn(ctx, fn) {
+  const label = ctx.session.tmp.label;
+  const id = nextId("btn");
+  data().settings.buttons.push({ id, label, type: "func", content: fn });
+  save();
+  reset(ctx);
+  await ctx.answerCallbackQuery({ text: "✅ Qo'shildi" });
+  await btnMenu(ctx, id);
+}
 adm.callbackQuery(/^a:btd:(\d+)$/, async (ctx) => { await ctx.answerCallbackQuery(); await btnMenu(ctx, ctx.match[1]); });
 adm.callbackQuery(/^a:btl:(\d+)$/, (ctx) => ask(ctx, "adm:btelabel", { id: ctx.match[1] }, "✏️ Tugmaning yangi nomini yuboring:"));
 adm.callbackQuery(/^a:btc:(\d+)$/, async (ctx) => {
   const b = findBtn(ctx.match[1]);
   if (!b) return ctx.answerCallbackQuery();
-  if (b.type === "shop") { await ctx.answerCallbackQuery(); return shopPicker(ctx, b.id); }
   await ask(
     ctx,
     "adm:btecontent",
@@ -815,7 +830,7 @@ async function adminText(ctx) {
   switch (s.step) {
     case "adm:gname": {
       const id = nextId("game");
-      data().games.push({ id, name: t.slice(0, 40), emoji: "🎮", needsServer: false, active: true, providerCode: "" });
+      data().games.push({ id, name: t.slice(0, 40), emoji: "🎮", needsServer: false, active: true, providerCode: "", kind: "game" });
       save();
       reset(ctx);
       await ctx.reply("✅ O'yin qo'shildi.");
@@ -1095,9 +1110,13 @@ async function adminText(ctx) {
         return true;
       }
       tmp.label = label;
-      if (tmp.type === "shop") {
-        s.step = "adm:btshop";
-        await shopPicker(ctx, "new");
+      if (tmp.type === "func") {
+        s.step = "adm:btfunc";
+        const fk = new InlineKeyboard();
+        for (const [k, v] of Object.entries(FUNCS)) fk.text(v, `a:bf:${k}`).row();
+        data().games.forEach((g) => fk.text(`${g.emoji} ${g.name} bo'limi`, `a:bfg:${g.id}`).row());
+        fk.text("❌ Bekor qilish", "a:home");
+        await ctx.reply("⚙️ Tugma bosilganda qaysi funksiya ishlasin?", { reply_markup: fk });
         return true;
       }
       s.step = "adm:btcontent";

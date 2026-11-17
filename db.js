@@ -34,48 +34,20 @@ const defaults = () => ({
   topups: [],
   promos: [], // { code, amount, maxUses, usedBy: [], active }
   seq: { game: 4, pkg: 0, order: 0, topup: 0 },
-  migrated: {},
 });
-
-// Telegram xizmatlari: kind = "premium" | "stars" (oddiy o'yin: kind yo'q yoki "game").
-// Narxlar — NAMUNA, admin paneldan o'zingizning narxingizga o'zgartiring.
-const TG_SEED = [
-  { kind: "premium", name: "Telegram Premium", emoji: "⭐️", pkgs: [["3 oy", 150000, "premium_3"], ["6 oy", 200000, "premium_6"], ["12 oy", 360000, "premium_12"]] },
-  { kind: "stars", name: "Telegram Stars", emoji: "🌟", pkgs: [["50 Stars", 15000, "stars_50"], ["100 Stars", 28000, "stars_100"], ["250 Stars", 70000, "stars_250"], ["500 Stars", 135000, "stars_500"], ["1000 Stars", 265000, "stars_1000"]] },
-];
-
-// Mavjud bazaga ham bir marta Premium/Stars qo'shadi (admin o'chirsa, qayta paydo bo'lmaydi)
-function migrate(d) {
-  if (d.migrated.tgServices) return false;
-  for (const s of TG_SEED) {
-    if (d.games.some((g) => g.kind === s.kind)) continue;
-    const gid = (d.seq.game = (d.seq.game || 0) + 1);
-    d.games.push({ id: gid, name: s.name, emoji: s.emoji, kind: s.kind, needsServer: false, active: true, providerCode: s.kind });
-    for (const [name, price, sku] of s.pkgs) {
-      const pid = (d.seq.pkg = (d.seq.pkg || 0) + 1);
-      d.packages.push({ id: pid, gameId: gid, name, price, active: true, sku });
-    }
-  }
-  d.migrated.tgServices = true;
-  return true;
-}
 
 function load() {
   fs.mkdirSync(path.dirname(FILE), { recursive: true });
   const d = defaults();
   if (fs.existsSync(FILE)) {
     const saved = JSON.parse(fs.readFileSync(FILE, "utf8"));
-    const merged = {
+    return {
       ...d,
       ...saved,
       settings: { ...d.settings, ...saved.settings },
       seq: { ...d.seq, ...saved.seq },
-      migrated: { ...d.migrated, ...saved.migrated },
     };
-    if (migrate(merged)) fs.writeFileSync(FILE, JSON.stringify(merged, null, 2));
-    return merged;
   }
-  migrate(d);
   fs.writeFileSync(FILE, JSON.stringify(d, null, 2));
   return d;
 }
