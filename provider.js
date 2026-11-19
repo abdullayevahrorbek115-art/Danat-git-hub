@@ -315,4 +315,20 @@ function importOffers(gameKey, gameName, offers, rate, markup) {
   return { game, createdGame, added, skipped, noPrice };
 }
 
-module.exports = { importOffers, checkId, deliver, checkOrder, catalog, offers, testCheck, cfg, DEFAULTS, LUDOVEX };
+// Qidiruv qatoriga mos o'yinni topadi: aniq bitta bo'lsa — shu, bir nechta bo'lsa — nomi aynan mos kelganini, aks holda noaniq
+const norm = (x) => String(x).toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+function pickGame(items, line) {
+  const words = norm(line).split(" ").filter(Boolean);
+  if (!words.length) return { none: true };
+  const cand = items.filter((x) => {
+    const hay = norm(x.name + " " + x.key);
+    return words.every((w) => hay.includes(w));
+  });
+  if (cand.length === 1) return { item: cand[0] };
+  if (!cand.length) return { none: true };
+  const exact = cand.filter((x) => norm(x.name) === norm(line));
+  if (exact.length === 1) return { item: exact[0] };
+  return { ambiguous: cand.slice(0, 4).map((x) => x.name || x.key) };
+}
+
+module.exports = { pickGame, importOffers, checkId, deliver, checkOrder, catalog, offers, testCheck, cfg, DEFAULTS, LUDOVEX };

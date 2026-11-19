@@ -758,6 +758,7 @@ async function provScreen(ctx, group = "main") {
     });
     kb.row().text("⚡ Ludovex ni ulash", "a:plx").row();
     kb.text("📋 Ludovex katalogi (kod va SKU)", "a:plc").row();
+    kb.text("📥 Bir nechta o'yinni birdan import", "a:plm").row();
     kb.text("🔎 ID tekshirish sozlamasi", "a:pg:check").row();
     kb.text("📦 Buyurtma sozlamasi", "a:pg:order").row();
     kb.text("🧪 ID tekshirishni sinash", "a:pt").row();
@@ -784,6 +785,15 @@ adm.callbackQuery("a:plx", async (ctx) => {
     "adm:pf",
     { key: "key" },
     "⚡ Ludovex sozlamalari qo'yildi va rejim API ga o'tdi.\n\n🔑 Endi Ludovex kabinetidan (Кабинет → API-ключи) olgan API kalitingizni yuboring. Kalitga <b>read</b> va <b>order</b> ruxsatlarini bering. Xabaringiz xavfsizlik uchun o'chiriladi."
+  );
+});
+adm.callbackQuery("a:plm", async (ctx) => {
+  if (!(await mainOnly(ctx))) return;
+  await ask(
+    ctx,
+    "adm:lxm",
+    {},
+    "📥 Birinchi qatorga <b>kurs va ustama foiz</b>, keyingi qatorlarga o'yin nomlarini yozing (har qatorga bitta, 10 tagacha):\n\n<code>12800 10\nfree fire cis\nmobile legends uz\npubg mobile auto</code>\n\nBot har bir o'yinni katalogdan topib, barcha paketlarini narxi bilan qo'shadi. Noaniq yoki topilmaganlarini alohida aytadi."
   );
 });
 adm.callbackQuery("a:plc", async (ctx) => {
@@ -1516,6 +1526,38 @@ async function adminText(ctx) {
       await paySysMenu(ctx, tmp.sys);
       return true;
     }
+    case "adm:lxm": {
+      if (!isMainAdmin(ctx.from.id)) { reset(ctx); return true; }
+      const lines = t.split(/\r?\n/).map((x) => x.trim()).filter(Boolean);
+      const [rt, mk] = (lines[0] || "").replace(",", ".").split(/\s+/).map(Number);
+      if (!Number.isFinite(rt) || rt < 1000 || rt > 100000 || !Number.isFinite(mk) || mk < 0 || mk > 500 || lines.length < 2) {
+        await ctx.reply("❗️ Birinchi qator: kurs va ustama (masalan <code>12800 10</code>), keyingi qatorlar: o'yin nomlari. Qayta yuboring:", { parse_mode: "HTML" });
+        return true;
+      }
+      reset(ctx);
+      await ctx.reply("⏳ Katalogdan olinmoqda, bir oz kuting...");
+      try {
+        const cat = await provider.catalog();
+        const out = [];
+        for (const line of lines.slice(1, 11)) {
+          const p = provider.pickGame(cat.items, line);
+          if (p.item) {
+            const r = await provider.offers(p.item.key);
+            if (!r.offers.length) { out.push(`⚠️ ${esc(line)}: paketlar topilmadi`); continue; }
+            const res = provider.importOffers(p.item.key, p.item.name, r.offers, rt, mk);
+            out.push(`✅ ${esc(res.game.name)}: ${res.added} ta qo'shildi` + (res.skipped ? `, ${res.skipped} ta avval bor` : "") + (res.noPrice ? `, ${res.noPrice} tasida narx yo'q` : ""));
+          } else if (p.ambiguous) {
+            out.push(`❓ ${esc(line)}: bir nechta topildi (${p.ambiguous.map(esc).join("; ")}) — aniqroq yozing`);
+          } else {
+            out.push(`❌ ${esc(line)}: topilmadi`);
+          }
+        }
+        await ctx.reply(out.join("\n") + `\n\n⚠️ Server ID kerak o'yinlarda (Mobile Legends) Panel → O'yinlar → o'yin → «Server ID» ni yoqing. Narxlarni «Paketlar» bo'limida tekshiring.`, { parse_mode: "HTML" });
+      } catch (e) {
+        await ctx.reply("❌ Xato: " + esc(e.message), { parse_mode: "HTML" });
+      }
+      return true;
+    }
     case "adm:lxi": {
       if (!isMainAdmin(ctx.from.id)) { reset(ctx); return true; }
       const [rt, mk] = t.replace(",", ".").split(/\s+/).map(Number);
@@ -1547,7 +1589,13 @@ async function adminText(ctx) {
       try {
         const r = await provider.catalog();
         const q = t.toLowerCase();
-        const found = (q === "*" ? r.items : r.items.filter((x) => (x.name + " " + x.key).toLowerCase().includes(q))).slice(0, 12);
+        // Hamma so'z nomda yoki kodda bo'lishi kerak (qavs va belgilar e'tiborga olinmaydi): "free fire cis" -> Free Fire (CIS)
+        const words = q.replace(/[^\p{L}\p{N}*]+/gu, " ").split(" ").filter(Boolean);
+        const all = q === "*" ? r.items : r.items.filter((x) => {
+          const hay = (x.name + " " + x.key).toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ");
+          return words.every((w) => hay.includes(w));
+        });
+        const found = all.slice(0, 40);
         if (!r.items.length) {
           await ctx.reply(`Katalog taniy olinmadi (HTTP ${r.status}). Xom javob:\n<pre>${esc(r.raw.slice(0, 1500))}</pre>`, { parse_mode: "HTML" });
         } else if (!found.length) {
@@ -1556,7 +1604,7 @@ async function adminText(ctx) {
           lxCache.set(ctx.from.id, found);
           const kb = new InlineKeyboard();
           found.forEach((g, i) => kb.text((g.name || g.key).slice(0, 40), `a:plv:${i}`).row());
-          await ctx.reply(`Topildi: ${found.length} ta${r.items.length > found.length && q === "*" ? " (birinchi 12 tasi)" : ""}. Paketlarini ko'rish uchun tanlang:`, { reply_markup: kb });
+          await ctx.reply(`Topildi: ${all.length} ta${all.length > found.length ? ` (birinchi ${found.length} tasi — aniqroq so'z yozing)` : ""}. Paketlarini ko'rish uchun tanlang:`, { reply_markup: kb });
         }
       } catch (e) {
         await ctx.reply("❌ Xato: " + esc(e.message) + "\nAPI kalit va ruxsatlarni (read) tekshiring.", { parse_mode: "HTML" });
@@ -1571,6 +1619,10 @@ async function adminText(ctx) {
         return true;
       }
       reset(ctx);
+      if (!provider.cfg().checkPath) {
+        await ctx.reply("ℹ️ Bu provayderda (Ludovex) ID tekshirish so'rovi yo'q, shuning uchun sinab bo'lmaydi. Bu xato emas: ulanish ishlayapti (katalog va import ishladi). Bot ID ni «tekshirilmagan» deb o'tkazadi. Mintaqani eng kichik paketni sotib olib sinang.");
+        return true;
+      }
       await ctx.reply("⏳ So'rov yuborilmoqda...");
       try {
         const r = await provider.testCheck(code, pid, sid || "");
